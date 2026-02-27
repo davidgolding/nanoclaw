@@ -27,8 +27,10 @@ Run `bash setup.sh` and parse the status block.
 
 Run `npx tsx setup/index.ts --step environment` and parse the status block.
 
+- If HAS_CLAUDE_KEY=true, HAS_OPENAI_KEY=true, or HAS_GEMINI_KEY=true → note existing LLM configuration
+- If ENABLED_CHANNELS contains values → note currently enabled channels (e.g. "whatsapp,telegram")
 - If HAS_AUTH=true → note that WhatsApp auth exists, offer to skip step 5
-- If HAS_REGISTERED_GROUPS=true → note existing config, offer to skip or reconfigure
+- If HAS_REGISTERED_GROUPS=true → note existing group registrations, offer to skip or reconfigure
 - Record APPLE_CONTAINER and DOCKER values for step 3
 
 ## 3. Container Runtime
@@ -73,17 +75,33 @@ Run `npx tsx setup/index.ts --step container -- --runtime <chosen>` and parse th
 
 **If TEST_OK=false but BUILD_OK=true:** The image built but won't run. Check logs — common cause is runtime not fully started. Wait a moment and retry the test.
 
-## 4. Claude Authentication (No Script)
+## 4. LLM Provider Configuration
 
-If HAS_ENV=true from step 2, read `.env` and check for `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. If present, confirm with user: keep or reconfigure?
+NanoClaw supports multiple LLM providers. Configure at least one to act as the assistant's "brain."
 
-AskUserQuestion: Claude subscription (Pro/Max) vs Anthropic API key?
+AskUserQuestion: Which LLM provider would you like to configure? (Claude, OpenAI, Gemini)
 
-**Subscription:** Tell user to run `claude setup-token` in another terminal, copy the token, add `CLAUDE_CODE_OAUTH_TOKEN=<token>` to `.env`. Do NOT collect the token in chat.
+- **Claude:** Ask for Anthropic API key or Claude subscription.
+  - If subscription (Pro/Max): Tell user to run `claude setup-token` in another terminal, copy the token, add `CLAUDE_CODE_OAUTH_TOKEN=<token>` to `.env`.
+  - If API key: `npx tsx setup/index.ts --step llm-config -- --provider claude --key KEY`
+- **OpenAI:** Ask for OpenAI API key.
+  - `npx tsx setup/index.ts --step llm-config -- --provider openai --key KEY` (Optional: `--model gpt-4o`)
+- **Gemini:** Ask for Google Generative AI API key.
+  - `npx tsx setup/index.ts --step llm-config -- --provider gemini --key KEY` (Optional: `--model gemini-2.0-flash`)
 
-**API key:** Tell user to add `ANTHROPIC_API_KEY=<key>` to `.env`.
+## 5. Channel Configuration
 
-## 5. WhatsApp Authentication
+Enable and configure the messaging channels you want to use.
+
+AskUserQuestion: Which channels would you like to enable? (WhatsApp, Telegram, Signal)
+
+- **WhatsApp:** Enabled by default.
+- **Telegram:** Ask for Bot Token from @BotFather.
+  - `npx tsx setup/index.ts --step channel-config -- --channel telegram --opt token=TOKEN`
+- **Signal:** Assumes `signal-cli` is pre-installed.
+  - `npx tsx setup/index.ts --step channel-config -- --channel signal` (Optional: `--opt port=7583 --opt host=127.0.0.1`)
+
+## 6. WhatsApp Authentication
 
 If HAS_AUTH=true, confirm: keep or re-authenticate?
 
@@ -98,7 +116,7 @@ Otherwise (macOS, desktop Linux, or WSL) → AskUserQuestion: QR code in browser
 
 **If failed:** qr_timeout → re-run. logged_out → delete `store/auth/` and re-run. 515 → re-run. timeout → ask user, offer retry.
 
-## 6. Configure Trigger and Channel Type
+## 7. Configure Trigger and Channel Type
 
 Get bot's WhatsApp number: `node -e "const c=require('./store/auth/creds.json');console.log(c.me.id.split(':')[0].split('@')[0])"`
 
@@ -107,7 +125,7 @@ AskUserQuestion: Shared number or dedicated? → AskUserQuestion: Trigger word? 
 **Shared number:** Self-chat (recommended) or Solo group
 **Dedicated number:** DM with bot (recommended) or Solo group with bot
 
-## 7. Sync and Select Group (If Group Channel)
+## 8. Sync and Select Group (If Group Channel)
 
 **Personal chat:** JID = `NUMBER@s.whatsapp.net`
 **DM with bot:** Ask for bot's number, JID = `NUMBER@s.whatsapp.net`
@@ -118,18 +136,18 @@ AskUserQuestion: Shared number or dedicated? → AskUserQuestion: Trigger word? 
 3. `npx tsx setup/index.ts --step groups -- --list` for pipe-separated JID|name lines.
 4. Present candidates as AskUserQuestion (names only, not JIDs).
 
-## 8. Register Channel
+## 9. Register Channel
 
-Run `npx tsx setup/index.ts --step register -- --jid "JID" --name "main" --trigger "@TriggerWord" --folder "main"` plus `--no-trigger-required` if personal/DM/solo, `--assistant-name "Name"` if not Andy.
+Run `npx tsx setup/index.ts --step register -- --jid "JID" --channel "whatsapp|telegram|signal" --name "main" --trigger "@TriggerWord" --folder "main"` plus `--no-trigger-required` if personal/DM/solo, `--assistant-name "Name"` if not Andy.
 
-## 9. Mount Allowlist
+## 10. Mount Allowlist
 
 AskUserQuestion: Agent access to external directories?
 
 **No:** `npx tsx setup/index.ts --step mounts -- --empty`
 **Yes:** Collect paths/permissions. `npx tsx setup/index.ts --step mounts -- --json '{"allowedRoots":[...],"blockedPatterns":[],"nonMainReadOnly":true}'`
 
-## 10. Start Service
+## 11. Start Service
 
 If service already running: unload first.
 - macOS: `launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist`
@@ -159,16 +177,16 @@ Replace `USERNAME` with the actual username (from `whoami`). Run the two `sudo` 
 - Linux: check `systemctl --user status nanoclaw`.
 - Re-run the service step after fixing.
 
-## 11. Verify
+## 12. Verify
 
 Run `npx tsx setup/index.ts --step verify` and parse the status block.
 
 **If STATUS=failed, fix each:**
 - SERVICE=stopped → `npm run build`, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux) or `bash start-nanoclaw.sh` (WSL nohup)
-- SERVICE=not_found → re-run step 10
-- CREDENTIALS=missing → re-run step 4
-- WHATSAPP_AUTH=not_found → re-run step 5
-- REGISTERED_GROUPS=0 → re-run steps 7-8
+- SERVICE=not_found → re-run step 11
+- CREDENTIALS=missing → re-run step 4 (ensure at least one LLM key is set)
+- WHATSAPP_AUTH=not_found → re-run step 6 (only if WhatsApp enabled)
+- REGISTERED_GROUPS=0 → re-run steps 8-9
 - MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
 
 Tell user to test: send a message in their registered chat. Show: `tail -f logs/nanoclaw.log`
