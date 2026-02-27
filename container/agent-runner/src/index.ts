@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 import { ContainerInput, ContainerOutput, AgentProvider } from './types.js';
 import { ClaudeAdapter } from './adapters/claude.js';
 import { OpenAIAdapter } from './adapters/openai.js';
+import { GeminiAdapter } from './adapters/gemini.js';
 
 interface SessionEntry {
   sessionId: string;
@@ -502,6 +503,9 @@ async function main(): Promise<void> {
   switch (containerInput.modelType) {
     case 'openai':
       provider = new OpenAIAdapter();
+      break;
+    case 'gemini':
+      provider = new GeminiAdapter();
       break;
     case 'claude':
     default:

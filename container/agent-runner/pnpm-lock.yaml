@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.2.34
         version: 0.2.62(zod@4.3.6)
+      '@google/generative-ai':
+        specifier: ^0.24.1
+        version: 0.24.1
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.27.1(zod@4.3.6)
@@ -38,6 +41,10 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
+
+  '@google/generative-ai@0.24.1':
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
+    engines: {node: '>=18.0.0'}
 
   '@hono/node-server@1.19.9':
     resolution: {integrity: sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw==}
@@ -540,6 +547,8 @@ snapshots:
       '@img/sharp-linuxmusl-x64': 0.34.5
       '@img/sharp-win32-arm64': 0.34.5
       '@img/sharp-win32-x64': 0.34.5
+
+  '@google/generative-ai@0.24.1': {}
 
   '@hono/node-server@1.19.9(hono@4.12.3)':
     dependencies:
