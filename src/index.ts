@@ -8,7 +8,7 @@ import {
   POLL_INTERVAL,
   TRIGGER_PATTERN,
 } from './config.js';
-import { WhatsAppChannel } from './channels/whatsapp.js';
+import { ChannelManager } from './channel-manager.js';
 import {
   ContainerOutput,
   runContainerAgent,
@@ -51,8 +51,8 @@ let registeredGroups: Record<string, RegisteredGroup> = {};
 let lastAgentTimestamp: Record<string, string> = {};
 let messageLoopRunning = false;
 
-let whatsapp: WhatsAppChannel;
-const channels: Channel[] = [];
+const channelManager = new ChannelManager();
+let channels: Channel[] = [];
 const queue = new GroupQueue();
 
 function loadState(): void {
@@ -77,26 +77,30 @@ function saveState(): void {
   setRouterState('last_agent_timestamp', JSON.stringify(lastAgentTimestamp));
 }
 
-function registerGroup(jid: string, group: RegisteredGroup): void {
+function registerGroup(
+  jid: string,
+  channel: string,
+  group: RegisteredGroup,
+): void {
   let groupDir: string;
   try {
     groupDir = resolveGroupFolderPath(group.folder);
   } catch (err) {
     logger.warn(
-      { jid, folder: group.folder, err },
+      { jid, channel, folder: group.folder, err },
       'Rejecting group registration with invalid folder',
     );
     return;
   }
 
-  registeredGroups[jid] = group;
-  setRegisteredGroup(jid, group);
+  registeredGroups[`${jid}|${channel}`] = { ...group, channel };
+  setRegisteredGroup(jid, channel, group);
 
   // Create group folder
   fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
 
   logger.info(
-    { jid, name: group.name, folder: group.folder },
+    { jid, channel, name: group.name, folder: group.folder },
     'Group registered',
   );
 }
@@ -130,21 +134,23 @@ export function _setRegisteredGroups(
  * Process all pending messages for a group.
  * Called by the GroupQueue when it's this group's turn.
  */
-async function processGroupMessages(chatJid: string): Promise<boolean> {
-  const group = registeredGroups[chatJid];
+async function processGroupMessages(chatKey: string): Promise<boolean> {
+  const group = registeredGroups[chatKey];
   if (!group) return true;
 
-  const channel = findChannel(channels, chatJid);
+  const [chatJid, channelType] = chatKey.split('|');
+  const channel = channelManager.getChannel(channelType);
   if (!channel) {
-    logger.warn({ chatJid }, 'No channel owns JID, skipping messages');
+    logger.warn({ chatJid, channelType }, 'No channel found, skipping messages');
     return true;
   }
 
   const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
 
-  const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
+  const sinceTimestamp = lastAgentTimestamp[chatKey] || '';
   const missedMessages = getMessagesSince(
     chatJid,
+    channelType,
     sinceTimestamp,
     ASSISTANT_NAME,
   );
@@ -163,13 +169,13 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
   // Advance cursor so the piping path in startMessageLoop won't re-fetch
   // these messages. Save the old cursor so we can roll back on error.
-  const previousCursor = lastAgentTimestamp[chatJid] || '';
-  lastAgentTimestamp[chatJid] =
+  const previousCursor = lastAgentTimestamp[chatKey] || '';
+  lastAgentTimestamp[chatKey] =
     missedMessages[missedMessages.length - 1].timestamp;
   saveState();
 
   logger.info(
-    { group: group.name, messageCount: missedMessages.length },
+    { group: group.name, channel: channelType, messageCount: missedMessages.length },
     'Processing messages',
   );
 
@@ -183,7 +189,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         { group: group.name },
         'Idle timeout, closing container stdin',
       );
-      queue.closeStdin(chatJid);
+      queue.closeStdin(chatKey);
     }, IDLE_TIMEOUT);
   };
 
@@ -191,7 +197,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
-  const output = await runAgent(group, prompt, chatJid, async (result) => {
+  const output = await runAgent(group, prompt, chatJid, channelType, async (result) => {
     // Streaming output callback — called for each agent result
     if (result.result) {
       const raw =
@@ -210,7 +216,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     }
 
     if (result.status === 'success') {
-      queue.notifyIdle(chatJid);
+      queue.notifyIdle(chatKey);
     }
 
     if (result.status === 'error') {
@@ -232,7 +238,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
       return true;
     }
     // Roll back cursor so retries can re-process these messages
-    lastAgentTimestamp[chatJid] = previousCursor;
+    lastAgentTimestamp[chatKey] = previousCursor;
     saveState();
     logger.warn(
       { group: group.name },
@@ -248,10 +254,12 @@ async function runAgent(
   group: RegisteredGroup,
   prompt: string,
   chatJid: string,
+  channelType: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
 ): Promise<'success' | 'error'> {
   const isMain = group.folder === MAIN_GROUP_FOLDER;
   const sessionId = sessions[group.folder];
+  const chatKey = `${chatJid}|${channelType}`;
 
   // Update tasks snapshot for container to read (filtered by group)
   const tasks = getAllTasks();
@@ -301,7 +309,7 @@ async function runAgent(
         assistantName: ASSISTANT_NAME,
       },
       (proc, containerName) =>
-        queue.registerProcess(chatJid, proc, containerName, group.folder),
+        queue.registerProcess(chatKey, proc, containerName, group.folder),
       wrappedOnOutput,
     );
 
@@ -336,9 +344,12 @@ async function startMessageLoop(): Promise<void> {
 
   while (true) {
     try {
-      const jids = Object.keys(registeredGroups);
+      const chatPairs = Object.entries(registeredGroups).map(([key, group]) => {
+        const [jid, channel] = key.split('|');
+        return { jid, channel };
+      });
       const { messages, newTimestamp } = getNewMessages(
-        jids,
+        chatPairs,
         lastTimestamp,
         ASSISTANT_NAME,
       );
@@ -350,24 +361,29 @@ async function startMessageLoop(): Promise<void> {
         lastTimestamp = newTimestamp;
         saveState();
 
-        // Deduplicate by group
+        // Deduplicate by chatKey
         const messagesByGroup = new Map<string, NewMessage[]>();
         for (const msg of messages) {
-          const existing = messagesByGroup.get(msg.chat_jid);
+          const chatKey = `${msg.chat_jid}|${msg.channel}`;
+          const existing = messagesByGroup.get(chatKey);
           if (existing) {
             existing.push(msg);
           } else {
-            messagesByGroup.set(msg.chat_jid, [msg]);
+            messagesByGroup.set(chatKey, [msg]);
           }
         }
 
-        for (const [chatJid, groupMessages] of messagesByGroup) {
-          const group = registeredGroups[chatJid];
+        for (const [chatKey, groupMessages] of messagesByGroup) {
+          const group = registeredGroups[chatKey];
           if (!group) continue;
 
-          const channel = findChannel(channels, chatJid);
+          const [chatJid, channelType] = chatKey.split('|');
+          const channel = channelManager.getChannel(channelType);
           if (!channel) {
-            logger.warn({ chatJid }, 'No channel owns JID, skipping messages');
+            logger.warn(
+              { chatKey },
+              'No channel found, skipping messages',
+            );
             continue;
           }
 
@@ -388,30 +404,31 @@ async function startMessageLoop(): Promise<void> {
           // context that accumulated between triggers is included.
           const allPending = getMessagesSince(
             chatJid,
-            lastAgentTimestamp[chatJid] || '',
+            channelType,
+            lastAgentTimestamp[chatKey] || '',
             ASSISTANT_NAME,
           );
           const messagesToSend =
             allPending.length > 0 ? allPending : groupMessages;
           const formatted = formatMessages(messagesToSend);
 
-          if (queue.sendMessage(chatJid, formatted)) {
+          if (queue.sendMessage(chatKey, formatted)) {
             logger.debug(
-              { chatJid, count: messagesToSend.length },
+              { chatKey, count: messagesToSend.length },
               'Piped messages to active container',
             );
-            lastAgentTimestamp[chatJid] =
+            lastAgentTimestamp[chatKey] =
               messagesToSend[messagesToSend.length - 1].timestamp;
             saveState();
             // Show typing indicator while the container processes the piped message
             channel
               .setTyping?.(chatJid, true)
               ?.catch((err) =>
-                logger.warn({ chatJid, err }, 'Failed to set typing indicator'),
+                logger.warn({ chatKey, err }, 'Failed to set typing indicator'),
               );
           } else {
             // No active container — enqueue for a new one
-            queue.enqueueMessageCheck(chatJid);
+            queue.enqueueMessageCheck(chatKey);
           }
         }
       }
@@ -427,15 +444,25 @@ async function startMessageLoop(): Promise<void> {
  * Handles crash between advancing lastTimestamp and processing messages.
  */
 function recoverPendingMessages(): void {
-  for (const [chatJid, group] of Object.entries(registeredGroups)) {
-    const sinceTimestamp = lastAgentTimestamp[chatJid] || '';
-    const pending = getMessagesSince(chatJid, sinceTimestamp, ASSISTANT_NAME);
+  for (const [chatKey, group] of Object.entries(registeredGroups)) {
+    const [chatJid, channelType] = chatKey.split('|');
+    const sinceTimestamp = lastAgentTimestamp[chatKey] || '';
+    const pending = getMessagesSince(
+      chatJid,
+      channelType,
+      sinceTimestamp,
+      ASSISTANT_NAME,
+    );
     if (pending.length > 0) {
       logger.info(
-        { group: group.name, pendingCount: pending.length },
+        {
+          group: group.name,
+          channel: channelType,
+          pendingCount: pending.length,
+        },
         'Recovery: found unprocessed messages',
       );
-      queue.enqueueMessageCheck(chatJid);
+      queue.enqueueMessageCheck(chatKey);
     }
   }
 }
@@ -463,7 +490,8 @@ async function main(): Promise<void> {
 
   // Channel callbacks (shared by all channels)
   const channelOpts = {
-    onMessage: (_chatJid: string, msg: NewMessage) => storeMessage(msg),
+    onMessage: (chatJid: string, msg: NewMessage) =>
+      storeMessage(msg, msg.channel),
     onChatMetadata: (
       chatJid: string,
       timestamp: string,
@@ -474,22 +502,24 @@ async function main(): Promise<void> {
     registeredGroups: () => registeredGroups,
   };
 
-  // Create and connect channels
-  whatsapp = new WhatsAppChannel(channelOpts);
-  channels.push(whatsapp);
-  await whatsapp.connect();
+  // Create and connect channels via manager
+  channels = await channelManager.loadChannels(channelOpts);
+  await channelManager.connectAll();
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({
     registeredGroups: () => registeredGroups,
     getSessions: () => sessions,
     queue,
-    onProcess: (groupJid, proc, containerName, groupFolder) =>
-      queue.registerProcess(groupJid, proc, containerName, groupFolder),
-    sendMessage: async (jid, rawText) => {
-      const channel = findChannel(channels, jid);
+    onProcess: (chatKey, proc, containerName, groupFolder) =>
+      queue.registerProcess(chatKey, proc, containerName, groupFolder),
+    sendMessage: async (jid, channelType, rawText) => {
+      const channel = channelManager.getChannel(channelType);
       if (!channel) {
-        logger.warn({ jid }, 'No channel owns JID, cannot send message');
+        logger.warn(
+          { jid, channelType },
+          'No channel found, cannot send message',
+        );
         return;
       }
       const text = formatOutbound(rawText);
@@ -497,15 +527,17 @@ async function main(): Promise<void> {
     },
   });
   startIpcWatcher({
-    sendMessage: (jid, text) => {
-      const channel = findChannel(channels, jid);
-      if (!channel) throw new Error(`No channel for JID: ${jid}`);
+    sendMessage: (jid, channelType, text) => {
+      const channel = channelManager.getChannel(channelType);
+      if (!channel) throw new Error(`No channel found: ${channelType}`);
       return channel.sendMessage(jid, text);
     },
     registeredGroups: () => registeredGroups,
     registerGroup,
-    syncGroupMetadata: (force) =>
-      whatsapp?.syncGroupMetadata(force) ?? Promise.resolve(),
+    syncGroupMetadata: (force) => {
+      const wa = channelManager.getChannel('whatsapp');
+      return (wa as any)?.syncGroupMetadata(force) ?? Promise.resolve();
+    },
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>
       writeGroupsSnapshot(gf, im, ag, rj),

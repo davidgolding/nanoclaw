@@ -16,26 +16,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import { query, HookCallback, PreCompactHookInput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
-
-interface ContainerInput {
-  prompt: string;
-  sessionId?: string;
-  groupFolder: string;
-  chatJid: string;
-  isMain: boolean;
-  isScheduledTask?: boolean;
-  assistantName?: string;
-  secrets?: Record<string, string>;
-}
-
-interface ContainerOutput {
-  status: 'success' | 'error';
-  result: string | null;
-  newSessionId?: string;
-  error?: string;
-}
+import { ContainerInput, ContainerOutput, AgentProvider } from './types.js';
+import { ClaudeAdapter } from './adapters/claude.js';
+import { OpenAIAdapter } from './adapters/openai.js';
 
 interface SessionEntry {
   sessionId: string;
@@ -508,15 +492,24 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Build SDK env: merge secrets into process.env for the SDK only.
-  // Secrets never touch process.env itself, so Bash subprocesses can't see them.
   const sdkEnv: Record<string, string | undefined> = { ...process.env };
   for (const [key, value] of Object.entries(containerInput.secrets || {})) {
     sdkEnv[key] = value;
   }
 
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const mcpServerPath = path.join(__dirname, 'ipc-mcp-stdio.js');
+  // Provider selection
+  let provider: AgentProvider;
+  switch (containerInput.modelType) {
+    case 'openai':
+      provider = new OpenAIAdapter();
+      break;
+    case 'claude':
+    default:
+      provider = new ClaudeAdapter();
+      break;
+  }
+
+  await provider.initialize(containerInput, sdkEnv);
 
   let sessionId = containerInput.sessionId;
   fs.mkdirSync(IPC_INPUT_DIR, { recursive: true });
@@ -541,7 +534,8 @@ async function main(): Promise<void> {
     while (true) {
       log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
 
-      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+      const queryResult = await provider.query(prompt, async (res) => writeOutput(res));
+      
       if (queryResult.newSessionId) {
         sessionId = queryResult.newSessionId;
       }

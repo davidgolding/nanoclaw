@@ -22,6 +22,7 @@ describe('task scheduler', () => {
       id: 'task-invalid-folder',
       group_folder: '../../outside',
       chat_jid: 'bad@g.us',
+      channel: 'whatsapp',
       prompt: 'run',
       schedule_type: 'once',
       schedule_value: '2026-02-22T00:00:00.000Z',
@@ -38,7 +39,15 @@ describe('task scheduler', () => {
     );
 
     startSchedulerLoop({
-      registeredGroups: () => ({}),
+      registeredGroups: () => ({
+        'bad@g.us|whatsapp': {
+          name: 'Bad',
+          folder: '../../outside',
+          trigger: '@Andy',
+          added_at: '2026-02-22T00:00:00.000Z',
+          channel: 'whatsapp',
+        },
+      }),
       getSessions: () => ({}),
       queue: { enqueueTask } as any,
       onProcess: () => {},

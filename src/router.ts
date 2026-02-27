@@ -30,16 +30,21 @@ export function formatOutbound(rawText: string): string {
 export function routeOutbound(
   channels: Channel[],
   jid: string,
+  channelType: string,
   text: string,
 ): Promise<void> {
-  const channel = channels.find((c) => c.ownsJid(jid) && c.isConnected());
-  if (!channel) throw new Error(`No channel for JID: ${jid}`);
+  const channel = channels.find(
+    (c) => c.type === channelType && c.ownsJid(jid) && c.isConnected(),
+  );
+  if (!channel)
+    throw new Error(`No channel for JID: ${jid} on channel: ${channelType}`);
   return channel.sendMessage(jid, text);
 }
 
 export function findChannel(
   channels: Channel[],
   jid: string,
+  channelType: string,
 ): Channel | undefined {
-  return channels.find((c) => c.ownsJid(jid));
+  return channels.find((c) => c.type === channelType && c.ownsJid(jid));
 }

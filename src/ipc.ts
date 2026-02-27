@@ -16,9 +16,13 @@ import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
-  sendMessage: (jid: string, text: string) => Promise<void>;
+  sendMessage: (
+    jid: string,
+    channelType: string,
+    text: string,
+  ) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
-  registerGroup: (jid: string, group: RegisteredGroup) => void;
+  registerGroup: (jid: string, channel: string, group: RegisteredGroup) => void;
   syncGroupMetadata: (force: boolean) => Promise<void>;
   getAvailableGroups: () => AvailableGroup[];
   writeGroupsSnapshot: (
@@ -74,19 +78,23 @@ export function startIpcWatcher(deps: IpcDeps): void {
               const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
               if (data.type === 'message' && data.chatJid && data.text) {
                 // Authorization: verify this group can send to this chatJid
-                const targetGroup = registeredGroups[data.chatJid];
+                // For multi-channel IPC, we need to know the channel.
+                // Assuming IPC messages will now include 'channel'. Fallback to 'whatsapp'.
+                const channel = data.channel || 'whatsapp';
+                const chatKey = `${data.chatJid}|${channel}`;
+                const targetGroup = registeredGroups[chatKey];
                 if (
                   isMain ||
                   (targetGroup && targetGroup.folder === sourceGroup)
                 ) {
-                  await deps.sendMessage(data.chatJid, data.text);
+                  await deps.sendMessage(data.chatJid, channel, data.text);
                   logger.info(
-                    { chatJid: data.chatJid, sourceGroup },
+                    { chatJid: data.chatJid, channel, sourceGroup },
                     'IPC message sent',
                   );
                 } else {
                   logger.warn(
-                    { chatJid: data.chatJid, sourceGroup },
+                    { chatJid: data.chatJid, channel, sourceGroup },
                     'Unauthorized IPC message attempt blocked',
                   );
                 }
@@ -185,13 +193,15 @@ export async function processTaskIpc(
         data.schedule_value &&
         data.targetJid
       ) {
-        // Resolve the target group from JID
+        // Resolve the target group from JID and Channel
         const targetJid = data.targetJid as string;
-        const targetGroupEntry = registeredGroups[targetJid];
+        const targetChannel = (data as any).channel || 'whatsapp';
+        const chatKey = `${targetJid}|${targetChannel}`;
+        const targetGroupEntry = registeredGroups[chatKey];
 
         if (!targetGroupEntry) {
           logger.warn(
-            { targetJid },
+            { targetJid, targetChannel },
             'Cannot schedule task: target group not registered',
           );
           break;
@@ -365,13 +375,15 @@ export async function processTaskIpc(
           );
           break;
         }
-        deps.registerGroup(data.jid, {
+        const channel = (data as any).channel || 'whatsapp';
+        deps.registerGroup(data.jid, channel, {
           name: data.name,
           folder: data.folder,
           trigger: data.trigger,
           added_at: new Date().toISOString(),
           containerConfig: data.containerConfig,
           requiresTrigger: data.requiresTrigger,
+          channel,
         });
       } else {
         logger.warn(
