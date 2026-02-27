@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  An AI assistant that runs agents securely in their own containers. Lightweight, built to be easily understood and completely customized for your needs.
+  An AI assistant that runs agents securely in their own containers. LLM-agnostic (Claude, OpenAI, Gemini), built to be easily understood and completely customized for your needs.
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
   <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
 </p>
 
-Using Claude Code, NanoClaw can dynamically rewrite its code to customize its feature set for your needs.
+Using Claude Code or Gemini CLI, NanoClaw can dynamically rewrite its code to customize its feature set for your needs.
 
 **New:** First AI assistant to support [Agent Swarms](https://code.claude.com/docs/en/agent-teams). Spin up teams of agents that collaborate in your chat.
 
@@ -21,17 +21,20 @@ Using Claude Code, NanoClaw can dynamically rewrite its code to customize its fe
 
 [OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
 
-NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. Claude agents run in their own Linux containers with filesystem isolation, not merely behind permission checks.
+NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. LLM agents run in their own Linux containers with filesystem isolation, not merely behind permission checks.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/qwibitai/NanoClaw.git
-cd NanoClaw
+git clone https://github.com/davidgolding/nanoclaw.git
+cd nanoclaw
+# If using Claude Code:
 claude
+# If using Gemini CLI:
+gemini
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup and service configuration.
+Then run `/setup` (Claude) or `/nanoclaw-setup` (Gemini). The agent handles everything: dependencies, authentication, container setup, LLM provider selection, and channel configuration.
 
 ## Philosophy
 
@@ -50,17 +53,18 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 
 **Skills over features.** Instead of adding features (e.g. support for Telegram) to the codebase, contributors submit [claude code skills](https://code.claude.com/docs/en/skills) like `/add-telegram` that transform your fork. You end up with clean code that does exactly what you need.
 
-**Best harness, best model.** NanoClaw runs on the Claude Agent SDK, which means you're running Claude Code directly. Claude Code is highly capable and its coding and problem-solving capabilities allow it to modify and expand NanoClaw and tailor it to each user.
+**Best harness, best model.** NanoClaw is LLM-agnostic. While it runs on the Claude Agent SDK by default, it can be configured to use OpenAI (GPT-4o) or Gemini (2.0 Flash) as its primary model.
 
 ## What It Supports
 
-- **Messenger I/O** - Message NanoClaw from your phone. Supports WhatsApp, Telegram, Discord, Slack, Signal and headless operation.
+- **Multi-LLM Brains** - Use Claude, OpenAI, or Gemini. Switch between them or use different models for different groups.
+- **Messenger I/O** - Message NanoClaw from your phone. Supports WhatsApp, Telegram, and Signal natively, with Discord, Slack, and others available via skills.
 - **Isolated group context** - Each group has its own `CLAUDE.md` memory, isolated filesystem, and runs in its own container sandbox with only that filesystem mounted to it.
 - **Main channel** - Your private channel (self-chat) for admin control; every group is completely isolated
-- **Scheduled tasks** - Recurring jobs that run Claude and can message you back
+- **Scheduled tasks** - Recurring jobs that run agents and can message you back
 - **Web access** - Search and fetch content from the Web
 - **Container isolation** - Agents are sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
-- **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks. NanoClaw is the first personal AI assistant to support agent swarms.
+- **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks.
 - **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
 ## Usage
@@ -121,21 +125,20 @@ Skills we'd like to see:
 ## Architecture
 
 ```
-WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) --> Response
+Messenger (WhatsApp/Telegram/Signal) --> ChannelManager --> SQLite --> AgentProvider --> Container (Multi-LLM) --> Response
 ```
 
-Single Node.js process. Agents execute in isolated Linux containers with filesystem isolation. Only mounted directories are accessible. Per-group message queue with concurrency control. IPC via filesystem.
+Single Node.js process on the host. Agents execute in isolated Linux containers with filesystem isolation.
 
 Key files:
 - `src/index.ts` - Orchestrator: state, message loop, agent invocation
-- `src/channels/whatsapp.ts` - WhatsApp connection, auth, send/receive
-- `src/ipc.ts` - IPC watcher and task processing
-- `src/router.ts` - Message formatting and outbound routing
-- `src/group-queue.ts` - Per-group queue with global concurrency limit
-- `src/container-runner.ts` - Spawns streaming agent containers
-- `src/task-scheduler.ts` - Runs scheduled tasks
+- `src/channel-manager.ts` - Dynamic loading and management of communication channels
+- `src/channels/` - Implementations for WhatsApp, Telegram, Signal, etc.
+- `container/agent-runner/src/adapters/` - Adapters for Claude, OpenAI, and Gemini
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
-- `groups/*/CLAUDE.md` - Per-group memory
+- `src/router.ts` - Message routing and channel selection
+- `src/group-queue.ts` - Per-group queue with global concurrency limit
+- `src/task-scheduler.ts` - Runs scheduled tasks
 
 ## FAQ
 

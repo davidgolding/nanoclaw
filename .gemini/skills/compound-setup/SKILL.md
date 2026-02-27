@@ -1,5 +1,5 @@
 ---
-name: setup
+name: compound-setup
 description: Configure which review agents run for your project. Auto-detects stack and writes compound-engineering.local.md.
 disable-model-invocation: true
 ---
