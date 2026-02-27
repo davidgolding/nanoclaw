@@ -35,6 +35,7 @@ export interface WhatsAppChannelOpts {
 
 export class WhatsAppChannel implements Channel {
   name = 'whatsapp';
+  type = 'whatsapp';
 
   private sock!: WASocket;
   private connected = false;
@@ -220,6 +221,7 @@ export class WhatsAppChannel implements Channel {
           this.opts.onMessage(chatJid, {
             id: msg.key.id || '',
             chat_jid: chatJid,
+            channel: 'whatsapp',
             sender,
             sender_name: senderName,
             content,
@@ -309,7 +311,7 @@ export class WhatsAppChannel implements Channel {
       let count = 0;
       for (const [jid, metadata] of Object.entries(groups)) {
         if (metadata.subject) {
-          updateChatName(jid, metadata.subject);
+          updateChatName(jid, 'whatsapp', metadata.subject);
           count++;
         }
       }

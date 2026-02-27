@@ -39,11 +39,13 @@ export interface RegisteredGroup {
   added_at: string;
   containerConfig?: ContainerConfig;
   requiresTrigger?: boolean; // Default: true for groups, false for solo chats
+  channel: string;
 }
 
 export interface NewMessage {
   id: string;
   chat_jid: string;
+  channel: string;
   sender: string;
   sender_name: string;
   content: string;
@@ -80,11 +82,16 @@ export interface TaskRunLog {
 
 export interface Channel {
   name: string;
+  type: string;
   connect(): Promise<void>;
   sendMessage(jid: string, text: string): Promise<void>;
   isConnected(): boolean;
   ownsJid(jid: string): boolean;
   disconnect(): Promise<void>;
+  // Optional: channel-specific setup/auth flow
+  setup?(): Promise<void>;
+  // Optional: sync group names from service
+  syncGroupMetadata?(force?: boolean): Promise<void>;
   // Optional: typing indicator. Channels that support it implement it.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
 }

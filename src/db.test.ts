@@ -21,28 +21,34 @@ beforeEach(() => {
 function store(overrides: {
   id: string;
   chat_jid: string;
+  channel?: string;
   sender: string;
   sender_name: string;
   content: string;
   timestamp: string;
   is_from_me?: boolean;
 }) {
-  storeMessage({
-    id: overrides.id,
-    chat_jid: overrides.chat_jid,
-    sender: overrides.sender,
-    sender_name: overrides.sender_name,
-    content: overrides.content,
-    timestamp: overrides.timestamp,
-    is_from_me: overrides.is_from_me ?? false,
-  });
+  const channel = overrides.channel ?? 'whatsapp';
+  storeMessage(
+    {
+      id: overrides.id,
+      chat_jid: overrides.chat_jid,
+      channel,
+      sender: overrides.sender,
+      sender_name: overrides.sender_name,
+      content: overrides.content,
+      timestamp: overrides.timestamp,
+      is_from_me: overrides.is_from_me ?? false,
+    },
+    channel,
+  );
 }
 
 // --- storeMessage (NewMessage format) ---
 
 describe('storeMessage', () => {
   it('stores a message and retrieves it', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'msg-1',
@@ -55,6 +61,7 @@ describe('storeMessage', () => {
 
     const messages = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -66,7 +73,7 @@ describe('storeMessage', () => {
   });
 
   it('filters out empty content', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'msg-2',
@@ -79,6 +86,7 @@ describe('storeMessage', () => {
 
     const messages = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -86,7 +94,7 @@ describe('storeMessage', () => {
   });
 
   it('stores is_from_me flag', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'msg-3',
@@ -101,6 +109,7 @@ describe('storeMessage', () => {
     // Message is stored (we can retrieve it — is_from_me doesn't affect retrieval)
     const messages = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -108,7 +117,7 @@ describe('storeMessage', () => {
   });
 
   it('upserts on duplicate id+chat_jid', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'msg-dup',
@@ -130,6 +139,7 @@ describe('storeMessage', () => {
 
     const messages = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -142,7 +152,7 @@ describe('storeMessage', () => {
 
 describe('getMessagesSince', () => {
   beforeEach(() => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'm1',
@@ -163,12 +173,13 @@ describe('getMessagesSince', () => {
     storeMessage({
       id: 'm3',
       chat_jid: 'group@g.us',
+      channel: 'whatsapp',
       sender: 'Bot@s.whatsapp.net',
       sender_name: 'Bot',
       content: 'bot reply',
       timestamp: '2024-01-01T00:00:03.000Z',
       is_bot_message: true,
-    });
+    }, 'whatsapp');
     store({
       id: 'm4',
       chat_jid: 'group@g.us',
@@ -182,6 +193,7 @@ describe('getMessagesSince', () => {
   it('returns messages after the given timestamp', () => {
     const msgs = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:02.000Z',
       'Andy',
     );
@@ -193,6 +205,7 @@ describe('getMessagesSince', () => {
   it('excludes bot messages via is_bot_message flag', () => {
     const msgs = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -201,7 +214,7 @@ describe('getMessagesSince', () => {
   });
 
   it('returns all non-bot messages when sinceTimestamp is empty', () => {
-    const msgs = getMessagesSince('group@g.us', '', 'Andy');
+    const msgs = getMessagesSince('group@g.us', 'whatsapp', '', 'Andy');
     // 3 user messages (bot message excluded)
     expect(msgs).toHaveLength(3);
   });
@@ -218,6 +231,7 @@ describe('getMessagesSince', () => {
     });
     const msgs = getMessagesSince(
       'group@g.us',
+      'whatsapp',
       '2024-01-01T00:00:04.000Z',
       'Andy',
     );
@@ -229,8 +243,8 @@ describe('getMessagesSince', () => {
 
 describe('getNewMessages', () => {
   beforeEach(() => {
-    storeChatMetadata('group1@g.us', '2024-01-01T00:00:00.000Z');
-    storeChatMetadata('group2@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group1@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
+    storeChatMetadata('group2@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
 
     store({
       id: 'a1',
@@ -251,12 +265,13 @@ describe('getNewMessages', () => {
     storeMessage({
       id: 'a3',
       chat_jid: 'group1@g.us',
+      channel: 'whatsapp',
       sender: 'user@s.whatsapp.net',
       sender_name: 'User',
       content: 'bot reply',
       timestamp: '2024-01-01T00:00:03.000Z',
       is_bot_message: true,
-    });
+    }, 'whatsapp');
     store({
       id: 'a4',
       chat_jid: 'group1@g.us',
@@ -269,7 +284,7 @@ describe('getNewMessages', () => {
 
   it('returns new messages across multiple groups', () => {
     const { messages, newTimestamp } = getNewMessages(
-      ['group1@g.us', 'group2@g.us'],
+      [{ jid: 'group1@g.us', channel: 'whatsapp' }, { jid: 'group2@g.us', channel: 'whatsapp' }],
       '2024-01-01T00:00:00.000Z',
       'Andy',
     );
@@ -280,7 +295,7 @@ describe('getNewMessages', () => {
 
   it('filters by timestamp', () => {
     const { messages } = getNewMessages(
-      ['group1@g.us', 'group2@g.us'],
+      [{ jid: 'group1@g.us', channel: 'whatsapp' }, { jid: 'group2@g.us', channel: 'whatsapp' }],
       '2024-01-01T00:00:02.000Z',
       'Andy',
     );
@@ -300,7 +315,7 @@ describe('getNewMessages', () => {
 
 describe('storeChatMetadata', () => {
   it('stores chat with JID as default name', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
     const chats = getAllChats();
     expect(chats).toHaveLength(1);
     expect(chats[0].jid).toBe('group@g.us');
@@ -308,22 +323,22 @@ describe('storeChatMetadata', () => {
   });
 
   it('stores chat with explicit name', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', 'My Group');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', 'My Group', 'whatsapp');
     const chats = getAllChats();
     expect(chats[0].name).toBe('My Group');
   });
 
   it('updates name on subsequent call with name', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z');
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:01.000Z', 'Updated Name');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:00.000Z', undefined, 'whatsapp');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:01.000Z', 'Updated Name', 'whatsapp');
     const chats = getAllChats();
     expect(chats).toHaveLength(1);
     expect(chats[0].name).toBe('Updated Name');
   });
 
   it('preserves newer timestamp on conflict', () => {
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:05.000Z');
-    storeChatMetadata('group@g.us', '2024-01-01T00:00:01.000Z');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:05.000Z', undefined, 'whatsapp');
+    storeChatMetadata('group@g.us', '2024-01-01T00:00:01.000Z', undefined, 'whatsapp');
     const chats = getAllChats();
     expect(chats[0].last_message_time).toBe('2024-01-01T00:00:05.000Z');
   });

@@ -17,6 +17,7 @@ const MAIN_GROUP: RegisteredGroup = {
   folder: 'main',
   trigger: 'always',
   added_at: '2024-01-01T00:00:00.000Z',
+  channel: 'whatsapp',
 };
 
 const OTHER_GROUP: RegisteredGroup = {
@@ -24,6 +25,7 @@ const OTHER_GROUP: RegisteredGroup = {
   folder: 'other-group',
   trigger: '@Andy',
   added_at: '2024-01-01T00:00:00.000Z',
+  channel: 'whatsapp',
 };
 
 const THIRD_GROUP: RegisteredGroup = {
@@ -31,31 +33,32 @@ const THIRD_GROUP: RegisteredGroup = {
   folder: 'third-group',
   trigger: '@Andy',
   added_at: '2024-01-01T00:00:00.000Z',
+  channel: 'whatsapp',
 };
 
-let groups: Record<string, RegisteredGroup>;
+let groups: Record<string, RegisteredGroup & { channel: string }>;
 let deps: IpcDeps;
 
 beforeEach(() => {
   _initTestDatabase();
 
   groups = {
-    'main@g.us': MAIN_GROUP,
-    'other@g.us': OTHER_GROUP,
-    'third@g.us': THIRD_GROUP,
+    'main@g.us|whatsapp': { ...MAIN_GROUP, channel: 'whatsapp' },
+    'other@g.us|whatsapp': { ...OTHER_GROUP, channel: 'whatsapp' },
+    'third@g.us|whatsapp': { ...THIRD_GROUP, channel: 'whatsapp' },
   };
 
   // Populate DB as well
-  setRegisteredGroup('main@g.us', MAIN_GROUP);
-  setRegisteredGroup('other@g.us', OTHER_GROUP);
-  setRegisteredGroup('third@g.us', THIRD_GROUP);
+  setRegisteredGroup('main@g.us', 'whatsapp', MAIN_GROUP);
+  setRegisteredGroup('other@g.us', 'whatsapp', OTHER_GROUP);
+  setRegisteredGroup('third@g.us', 'whatsapp', THIRD_GROUP);
 
   deps = {
     sendMessage: async () => {},
     registeredGroups: () => groups,
-    registerGroup: (jid, group) => {
-      groups[jid] = group;
-      setRegisteredGroup(jid, group);
+    registerGroup: (jid, channel, group) => {
+      groups[`${jid}|${channel}`] = { ...group, channel };
+      setRegisteredGroup(jid, channel, group);
       // Mock the fs.mkdirSync that registerGroup does
     },
     syncGroupMetadata: async () => {},
@@ -75,6 +78,7 @@ describe('schedule_task authorization', () => {
         schedule_type: 'once',
         schedule_value: '2025-06-01T00:00:00.000Z',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -95,6 +99,7 @@ describe('schedule_task authorization', () => {
         schedule_type: 'once',
         schedule_value: '2025-06-01T00:00:00.000Z',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'other-group',
       false,
@@ -114,6 +119,7 @@ describe('schedule_task authorization', () => {
         schedule_type: 'once',
         schedule_value: '2025-06-01T00:00:00.000Z',
         targetJid: 'main@g.us',
+        channel: 'whatsapp',
       },
       'other-group',
       false,
@@ -132,6 +138,7 @@ describe('schedule_task authorization', () => {
         schedule_type: 'once',
         schedule_value: '2025-06-01T00:00:00.000Z',
         targetJid: 'unknown@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -151,6 +158,7 @@ describe('pause_task authorization', () => {
       id: 'task-main',
       group_folder: 'main',
       chat_jid: 'main@g.us',
+      channel: 'whatsapp',
       prompt: 'main task',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -163,6 +171,7 @@ describe('pause_task authorization', () => {
       id: 'task-other',
       group_folder: 'other-group',
       chat_jid: 'other@g.us',
+      channel: 'whatsapp',
       prompt: 'other task',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -212,6 +221,7 @@ describe('resume_task authorization', () => {
       id: 'task-paused',
       group_folder: 'other-group',
       chat_jid: 'other@g.us',
+      channel: 'whatsapp',
       prompt: 'paused task',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -261,6 +271,7 @@ describe('cancel_task authorization', () => {
       id: 'task-to-cancel',
       group_folder: 'other-group',
       chat_jid: 'other@g.us',
+      channel: 'whatsapp',
       prompt: 'cancel me',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -284,6 +295,7 @@ describe('cancel_task authorization', () => {
       id: 'task-own',
       group_folder: 'other-group',
       chat_jid: 'other@g.us',
+      channel: 'whatsapp',
       prompt: 'my task',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -307,6 +319,7 @@ describe('cancel_task authorization', () => {
       id: 'task-foreign',
       group_folder: 'main',
       chat_jid: 'main@g.us',
+      channel: 'whatsapp',
       prompt: 'not yours',
       schedule_type: 'once',
       schedule_value: '2025-06-01T00:00:00.000Z',
@@ -334,6 +347,7 @@ describe('register_group authorization', () => {
       {
         type: 'register_group',
         jid: 'new@g.us',
+        channel: 'whatsapp',
         name: 'New Group',
         folder: 'new-group',
         trigger: '@Andy',
@@ -344,7 +358,7 @@ describe('register_group authorization', () => {
     );
 
     // registeredGroups should not have changed
-    expect(groups['new@g.us']).toBeUndefined();
+    expect(groups['new@g.us|whatsapp']).toBeUndefined();
   });
 
   it('main group cannot register with unsafe folder path', async () => {
@@ -352,6 +366,7 @@ describe('register_group authorization', () => {
       {
         type: 'register_group',
         jid: 'new@g.us',
+        channel: 'whatsapp',
         name: 'New Group',
         folder: '../../outside',
         trigger: '@Andy',
@@ -361,7 +376,7 @@ describe('register_group authorization', () => {
       deps,
     );
 
-    expect(groups['new@g.us']).toBeUndefined();
+    expect(groups['new@g.us|whatsapp']).toBeUndefined();
   });
 });
 
@@ -390,41 +405,43 @@ describe('IPC message authorization', () => {
     sourceGroup: string,
     isMain: boolean,
     targetChatJid: string,
+    targetChannel: string,
     registeredGroups: Record<string, RegisteredGroup>,
   ): boolean {
-    const targetGroup = registeredGroups[targetChatJid];
+    const chatKey = `${targetChatJid}|${targetChannel}`;
+    const targetGroup = registeredGroups[chatKey];
     return isMain || (!!targetGroup && targetGroup.folder === sourceGroup);
   }
 
   it('main group can send to any group', () => {
-    expect(isMessageAuthorized('main', true, 'other@g.us', groups)).toBe(true);
-    expect(isMessageAuthorized('main', true, 'third@g.us', groups)).toBe(true);
+    expect(isMessageAuthorized('main', true, 'other@g.us', 'whatsapp', groups)).toBe(true);
+    expect(isMessageAuthorized('main', true, 'third@g.us', 'whatsapp', groups)).toBe(true);
   });
 
   it('non-main group can send to its own chat', () => {
     expect(
-      isMessageAuthorized('other-group', false, 'other@g.us', groups),
+      isMessageAuthorized('other-group', false, 'other@g.us', 'whatsapp', groups),
     ).toBe(true);
   });
 
   it('non-main group cannot send to another groups chat', () => {
-    expect(isMessageAuthorized('other-group', false, 'main@g.us', groups)).toBe(
+    expect(isMessageAuthorized('other-group', false, 'main@g.us', 'whatsapp', groups)).toBe(
       false,
     );
     expect(
-      isMessageAuthorized('other-group', false, 'third@g.us', groups),
+      isMessageAuthorized('other-group', false, 'third@g.us', 'whatsapp', groups),
     ).toBe(false);
   });
 
   it('non-main group cannot send to unregistered JID', () => {
     expect(
-      isMessageAuthorized('other-group', false, 'unknown@g.us', groups),
+      isMessageAuthorized('other-group', false, 'unknown@g.us', 'whatsapp', groups),
     ).toBe(false);
   });
 
   it('main group can send to unregistered JID', () => {
     // Main is always authorized regardless of target
-    expect(isMessageAuthorized('main', true, 'unknown@g.us', groups)).toBe(
+    expect(isMessageAuthorized('main', true, 'unknown@g.us', 'whatsapp', groups)).toBe(
       true,
     );
   });
@@ -441,6 +458,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'cron',
         schedule_value: '0 9 * * *', // every day at 9am
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -465,6 +483,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'cron',
         schedule_value: 'not a cron',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -484,6 +503,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'interval',
         schedule_value: '3600000', // 1 hour
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -507,6 +527,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'interval',
         schedule_value: 'abc',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -524,6 +545,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'interval',
         schedule_value: '0',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -541,6 +563,7 @@ describe('schedule_task schedule types', () => {
         schedule_type: 'once',
         schedule_value: 'not-a-date',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -563,6 +586,7 @@ describe('schedule_task context_mode', () => {
         schedule_value: '2025-06-01T00:00:00.000Z',
         context_mode: 'group',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -582,6 +606,7 @@ describe('schedule_task context_mode', () => {
         schedule_value: '2025-06-01T00:00:00.000Z',
         context_mode: 'isolated',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -601,6 +626,7 @@ describe('schedule_task context_mode', () => {
         schedule_value: '2025-06-01T00:00:00.000Z',
         context_mode: 'bogus' as any,
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -619,6 +645,7 @@ describe('schedule_task context_mode', () => {
         schedule_type: 'once',
         schedule_value: '2025-06-01T00:00:00.000Z',
         targetJid: 'other@g.us',
+        channel: 'whatsapp',
       },
       'main',
       true,
@@ -638,6 +665,7 @@ describe('register_group success', () => {
       {
         type: 'register_group',
         jid: 'new@g.us',
+        channel: 'whatsapp',
         name: 'New Group',
         folder: 'new-group',
         trigger: '@Andy',
@@ -648,7 +676,7 @@ describe('register_group success', () => {
     );
 
     // Verify group was registered in DB
-    const group = getRegisteredGroup('new@g.us');
+    const group = getRegisteredGroup('new@g.us', 'whatsapp');
     expect(group).toBeDefined();
     expect(group!.name).toBe('New Group');
     expect(group!.folder).toBe('new-group');
@@ -660,6 +688,7 @@ describe('register_group success', () => {
       {
         type: 'register_group',
         jid: 'partial@g.us',
+        channel: 'whatsapp',
         name: 'Partial',
         // missing folder and trigger
       },
@@ -668,6 +697,6 @@ describe('register_group success', () => {
       deps,
     );
 
-    expect(getRegisteredGroup('partial@g.us')).toBeUndefined();
+    expect(getRegisteredGroup('partial@g.us', 'whatsapp')).toBeUndefined();
   });
 });

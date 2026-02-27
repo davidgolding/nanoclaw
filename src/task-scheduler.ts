@@ -36,7 +36,7 @@ export interface SchedulerDependencies {
     containerName: string,
     groupFolder: string,
   ) => void;
-  sendMessage: (jid: string, text: string) => Promise<void>;
+  sendMessage: (jid: string, channelType: string, text: string) => Promise<void>;
 }
 
 async function runTask(
@@ -126,13 +126,15 @@ async function runTask(
 
   const scheduleClose = () => {
     if (closeTimer) return; // already scheduled
+    const chatKey = `${task.chat_jid}|${group.channel}`;
     closeTimer = setTimeout(() => {
       logger.debug({ taskId: task.id }, 'Closing task container after result');
-      deps.queue.closeStdin(task.chat_jid);
+      deps.queue.closeStdin(chatKey);
     }, TASK_CLOSE_DELAY_MS);
   };
 
   try {
+    const chatKey = `${task.chat_jid}|${group.channel}`;
     const output = await runContainerAgent(
       group,
       {
@@ -145,16 +147,16 @@ async function runTask(
         assistantName: ASSISTANT_NAME,
       },
       (proc, containerName) =>
-        deps.onProcess(task.chat_jid, proc, containerName, task.group_folder),
+        deps.onProcess(chatKey, proc, containerName, task.group_folder),
       async (streamedOutput: ContainerOutput) => {
         if (streamedOutput.result) {
           result = streamedOutput.result;
           // Forward result to user (sendMessage handles formatting)
-          await deps.sendMessage(task.chat_jid, streamedOutput.result);
+          await deps.sendMessage(task.chat_jid, group.channel, streamedOutput.result);
           scheduleClose();
         }
         if (streamedOutput.status === 'success') {
-          deps.queue.notifyIdle(task.chat_jid);
+          deps.queue.notifyIdle(chatKey);
         }
         if (streamedOutput.status === 'error') {
           error = streamedOutput.error || 'Unknown error';
@@ -236,7 +238,14 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
           continue;
         }
 
-        deps.queue.enqueueTask(currentTask.chat_jid, currentTask.id, () =>
+        const groups = deps.registeredGroups();
+        const groupEntry = Object.entries(groups).find(
+          ([, g]) => g.folder === currentTask.group_folder,
+        );
+        if (!groupEntry) continue;
+        const chatKey = groupEntry[0];
+
+        deps.queue.enqueueTask(chatKey, currentTask.id, () =>
           runTask(currentTask, deps),
         );
       }

@@ -10,6 +10,8 @@ const STEPS: Record<
   () => Promise<{ run: (args: string[]) => Promise<void> }>
 > = {
   environment: () => import('./environment.js'),
+  'llm-config': () => import('./llm-config.js'),
+  'channel-config': () => import('./channel-config.js'),
   container: () => import('./container.js'),
   'whatsapp-auth': () => import('./whatsapp-auth.js'),
   groups: () => import('./groups.js'),
