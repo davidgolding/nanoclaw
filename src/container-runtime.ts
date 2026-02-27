@@ -7,7 +7,7 @@ import { execSync } from 'child_process';
 import { logger } from './logger.js';
 
 /** The container runtime binary name. */
-export const CONTAINER_RUNTIME_BIN = 'docker';
+export const CONTAINER_RUNTIME_BIN = 'container';
 
 /** Returns CLI args for a readonly bind mount. */
 export function readonlyMountArgs(
@@ -45,10 +45,10 @@ export function ensureContainerRuntimeRunning(): void {
       '║  Agents cannot run without a container runtime. To fix:        ║',
     );
     console.error(
-      '║  1. Ensure Docker is installed and running                     ║',
+      '║  1. Ensure Apple Container is installed and running            ║',
     );
     console.error(
-      '║  2. Run: docker info                                           ║',
+      '║  2. Run: container info                                         ║',
     );
     console.error(
       '║  3. Restart NanoClaw                                           ║',
