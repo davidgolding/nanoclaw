@@ -41,6 +41,32 @@ export async function run(_args: string[]): Promise<void> {
 
   // Check existing config
   const hasEnv = fs.existsSync(path.join(projectRoot, '.env'));
+  let hasClaudeKey = false;
+  let hasOpenAIKey = false;
+  let hasGeminiKey = false;
+
+  if (hasEnv) {
+    const envContent = fs.readFileSync(path.join(projectRoot, '.env'), 'utf-8');
+    hasClaudeKey = envContent.includes('ANTHROPIC_API_KEY=');
+    hasOpenAIKey = envContent.includes('OPENAI_API_KEY=');
+    hasGeminiKey = envContent.includes('GEMINI_API_KEY=');
+  }
+
+  const channelsDir = path.join(projectRoot, 'config', 'channels');
+  const enabledChannels: string[] = [];
+  if (fs.existsSync(channelsDir)) {
+    const files = fs.readdirSync(channelsDir).filter((f) => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const config = JSON.parse(
+          fs.readFileSync(path.join(channelsDir, file), 'utf-8'),
+        );
+        if (config.enabled) enabledChannels.push(config.type);
+      } catch {
+        // Ignore bad config
+      }
+    }
+  }
 
   const authDir = path.join(projectRoot, 'store', 'auth');
   const hasAuth = fs.existsSync(authDir) && fs.readdirSync(authDir).length > 0;
@@ -86,6 +112,10 @@ export async function run(_args: string[]): Promise<void> {
     APPLE_CONTAINER: appleContainer,
     DOCKER: docker,
     HAS_ENV: hasEnv,
+    HAS_CLAUDE_KEY: hasClaudeKey,
+    HAS_OPENAI_KEY: hasOpenAIKey,
+    HAS_GEMINI_KEY: hasGeminiKey,
+    ENABLED_CHANNELS: enabledChannels.join(','),
     HAS_AUTH: hasAuth,
     HAS_REGISTERED_GROUPS: hasRegisteredGroups,
     STATUS: 'success',

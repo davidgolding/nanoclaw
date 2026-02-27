@@ -16,6 +16,7 @@ import { emitStatus } from './status.js';
 
 interface RegisterArgs {
   jid: string;
+  channel: string;
   name: string;
   trigger: string;
   folder: string;
@@ -26,6 +27,7 @@ interface RegisterArgs {
 function parseArgs(args: string[]): RegisterArgs {
   const result: RegisterArgs = {
     jid: '',
+    channel: 'whatsapp',
     name: '',
     trigger: '',
     folder: '',
@@ -37,6 +39,9 @@ function parseArgs(args: string[]): RegisterArgs {
     switch (args[i]) {
       case '--jid':
         result.jid = args[++i] || '';
+        break;
+      case '--channel':
+        result.channel = args[++i] || 'whatsapp';
         break;
       case '--name':
         result.name = args[++i] || '';
@@ -94,21 +99,24 @@ export async function run(args: string[]): Promise<void> {
   const db = new Database(dbPath);
   // Ensure schema exists
   db.exec(`CREATE TABLE IF NOT EXISTS registered_groups (
-    jid TEXT PRIMARY KEY,
+    jid TEXT,
+    channel TEXT,
     name TEXT NOT NULL,
     folder TEXT NOT NULL UNIQUE,
     trigger_pattern TEXT NOT NULL,
     added_at TEXT NOT NULL,
     container_config TEXT,
-    requires_trigger INTEGER DEFAULT 1
+    requires_trigger INTEGER DEFAULT 1,
+    PRIMARY KEY (jid, channel)
   )`);
 
   db.prepare(
     `INSERT OR REPLACE INTO registered_groups
-     (jid, name, folder, trigger_pattern, added_at, container_config, requires_trigger)
-     VALUES (?, ?, ?, ?, ?, NULL, ?)`,
+     (jid, channel, name, folder, trigger_pattern, added_at, container_config, requires_trigger)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
   ).run(
     parsed.jid,
+    parsed.channel,
     parsed.name,
     parsed.folder,
     parsed.trigger,
