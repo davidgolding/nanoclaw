@@ -5,6 +5,7 @@ import { logger } from './logger.js';
 import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from './types.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
 import { TelegramChannel } from './channels/telegram.js';
+import { SignalChannel } from './channels/signal.js';
 
 const ChannelConfigSchema = z.object({
   type: z.string(),
@@ -51,6 +52,13 @@ export class ChannelManager {
             break;
           case 'telegram':
             channel = new TelegramChannel({ ...opts, token: config.options?.token });
+            break;
+          case 'signal':
+            channel = new SignalChannel({
+              ...opts,
+              port: config.options?.port ? parseInt(config.options.port) : undefined,
+              host: config.options?.host,
+            });
             break;
           default:
             logger.warn({ type: config.type }, 'Unknown channel type');
