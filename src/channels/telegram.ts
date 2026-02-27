@@ -1,6 +1,12 @@
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup, NewMessage } from '../types.js';
+import {
+  Channel,
+  OnInboundMessage,
+  OnChatMetadata,
+  RegisteredGroup,
+  NewMessage,
+} from '../types.js';
 import { logger } from '../logger.js';
 
 export interface TelegramChannelOpts {
@@ -25,10 +31,17 @@ export class TelegramChannel implements Channel {
   async connect(): Promise<void> {
     this.bot.on(message('text'), async (ctx) => {
       const chatJid = ctx.chat.id.toString();
-      const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+      const isGroup =
+        ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
       const timestamp = new Date().toISOString();
 
-      this.opts.onChatMetadata(chatJid, timestamp, (ctx.chat as any).title || ctx.from.first_name, 'telegram', isGroup);
+      this.opts.onChatMetadata(
+        chatJid,
+        timestamp,
+        (ctx.chat as any).title || ctx.from.first_name,
+        'telegram',
+        isGroup,
+      );
 
       const groups = this.opts.registeredGroups();
       const chatKey = `${chatJid}|telegram`;

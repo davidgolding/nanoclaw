@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
 import { logger } from './logger.js';
-import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from './types.js';
+import {
+  Channel,
+  OnInboundMessage,
+  OnChatMetadata,
+  RegisteredGroup,
+} from './types.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
 import { TelegramChannel } from './channels/telegram.js';
 import { SignalChannel } from './channels/signal.js';
@@ -19,7 +24,9 @@ export class ChannelManager {
   private channels: Map<string, Channel> = new Map();
   private configDir: string;
 
-  constructor(configDir: string = path.join(process.cwd(), 'config', 'channels')) {
+  constructor(
+    configDir: string = path.join(process.cwd(), 'config', 'channels'),
+  ) {
     this.configDir = configDir;
   }
 
@@ -29,19 +36,29 @@ export class ChannelManager {
     registeredGroups: () => Record<string, RegisteredGroup>;
   }): Promise<Channel[]> {
     if (!fs.existsSync(this.configDir)) {
-      logger.info({ configDir: this.configDir }, 'Config directory not found, creating it');
+      logger.info(
+        { configDir: this.configDir },
+        'Config directory not found, creating it',
+      );
       fs.mkdirSync(this.configDir, { recursive: true });
-      
+
       // Create default WhatsApp config if it doesn't exist
       const defaultWA: ChannelConfig = { type: 'whatsapp', enabled: true };
-      fs.writeFileSync(path.join(this.configDir, 'whatsapp.json'), JSON.stringify(defaultWA, null, 2));
+      fs.writeFileSync(
+        path.join(this.configDir, 'whatsapp.json'),
+        JSON.stringify(defaultWA, null, 2),
+      );
     }
 
-    const files = fs.readdirSync(this.configDir).filter(f => f.endsWith('.json'));
-    
+    const files = fs
+      .readdirSync(this.configDir)
+      .filter((f) => f.endsWith('.json'));
+
     for (const file of files) {
       try {
-        const rawConfig = JSON.parse(fs.readFileSync(path.join(this.configDir, file), 'utf-8'));
+        const rawConfig = JSON.parse(
+          fs.readFileSync(path.join(this.configDir, file), 'utf-8'),
+        );
         const config = ChannelConfigSchema.parse(rawConfig);
         if (!config.enabled) continue;
 
@@ -51,12 +68,17 @@ export class ChannelManager {
             channel = new WhatsAppChannel(opts);
             break;
           case 'telegram':
-            channel = new TelegramChannel({ ...opts, token: config.options?.token });
+            channel = new TelegramChannel({
+              ...opts,
+              token: config.options?.token,
+            });
             break;
           case 'signal':
             channel = new SignalChannel({
               ...opts,
-              port: config.options?.port ? parseInt(config.options.port) : undefined,
+              port: config.options?.port
+                ? parseInt(config.options.port)
+                : undefined,
               host: config.options?.host,
             });
             break;
@@ -96,7 +118,10 @@ export class ChannelManager {
       try {
         await channel.connect();
       } catch (err) {
-        logger.error({ channel: channel.name, err }, 'Failed to connect channel');
+        logger.error(
+          { channel: channel.name, err },
+          'Failed to connect channel',
+        );
       }
     }
   }

@@ -151,7 +151,10 @@ async function processGroupMessages(chatKey: string): Promise<boolean> {
   const [chatJid, channelType] = chatKey.split('|');
   const channel = channelManager.getChannel(channelType);
   if (!channel) {
-    logger.warn({ chatJid, channelType }, 'No channel found, skipping messages');
+    logger.warn(
+      { chatJid, channelType },
+      'No channel found, skipping messages',
+    );
     return true;
   }
 
@@ -185,7 +188,11 @@ async function processGroupMessages(chatKey: string): Promise<boolean> {
   saveState();
 
   logger.info(
-    { group: group.name, channel: channelType, messageCount: missedMessages.length },
+    {
+      group: group.name,
+      channel: channelType,
+      messageCount: missedMessages.length,
+    },
     'Processing messages',
   );
 
@@ -207,32 +214,41 @@ async function processGroupMessages(chatKey: string): Promise<boolean> {
   let hadError = false;
   let outputSentToUser = false;
 
-  const output = await runAgent(group, prompt, chatJid, channelType, async (result) => {
-    // Streaming output callback — called for each agent result
-    if (result.result) {
-      const raw =
-        typeof result.result === 'string'
-          ? result.result
-          : JSON.stringify(result.result);
-      // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
-      const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
-      logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
-      if (text) {
-        await channel.sendMessage(chatJid, text);
-        outputSentToUser = true;
+  const output = await runAgent(
+    group,
+    prompt,
+    chatJid,
+    channelType,
+    async (result) => {
+      // Streaming output callback — called for each agent result
+      if (result.result) {
+        const raw =
+          typeof result.result === 'string'
+            ? result.result
+            : JSON.stringify(result.result);
+        // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
+        const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+        logger.info(
+          { group: group.name },
+          `Agent output: ${raw.slice(0, 200)}`,
+        );
+        if (text) {
+          await channel.sendMessage(chatJid, text);
+          outputSentToUser = true;
+        }
+        // Only reset idle timer on actual results, not session-update markers (result: null)
+        resetIdleTimer();
       }
-      // Only reset idle timer on actual results, not session-update markers (result: null)
-      resetIdleTimer();
-    }
 
-    if (result.status === 'success') {
-      queue.notifyIdle(chatKey);
-    }
+      if (result.status === 'success') {
+        queue.notifyIdle(chatKey);
+      }
 
-    if (result.status === 'error') {
-      hadError = true;
-    }
-  });
+      if (result.status === 'error') {
+        hadError = true;
+      }
+    },
+  );
 
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
@@ -386,10 +402,7 @@ async function startMessageLoop(): Promise<void> {
           const [chatJid, channelType] = chatKey.split('|');
           const channel = channelManager.getChannel(channelType);
           if (!channel) {
-            logger.warn(
-              { chatKey },
-              'No channel found, skipping messages',
-            );
+            logger.warn({ chatKey }, 'No channel found, skipping messages');
             continue;
           }
 

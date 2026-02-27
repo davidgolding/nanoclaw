@@ -599,7 +599,10 @@ export function setRegisteredGroup(
   );
 }
 
-export function getAllRegisteredGroups(): Record<string, RegisteredGroup & { channel: string }> {
+export function getAllRegisteredGroups(): Record<
+  string,
+  RegisteredGroup & { channel: string }
+> {
   const rows = db.prepare('SELECT * FROM registered_groups').all() as Array<{
     jid: string;
     channel: string;

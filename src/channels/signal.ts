@@ -1,6 +1,12 @@
 import net from 'node:net';
 import readline from 'node:readline';
-import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup, NewMessage } from '../types.js';
+import {
+  Channel,
+  OnInboundMessage,
+  OnChatMetadata,
+  RegisteredGroup,
+  NewMessage,
+} from '../types.js';
 import { logger } from '../logger.js';
 
 export interface SignalChannelOpts {
@@ -17,7 +23,10 @@ export class SignalChannel implements Channel {
   private opts: SignalChannelOpts;
   private socket: net.Socket | null = null;
   private rl: readline.Interface | null = null;
-  private pendingRequests = new Map<string, { resolve: (val: any) => void; reject: (err: any) => void }>();
+  private pendingRequests = new Map<
+    string,
+    { resolve: (val: any) => void; reject: (err: any) => void }
+  >();
   private requestId = 0;
   private connected = false;
 
@@ -88,7 +97,13 @@ export class SignalChannel implements Channel {
 
     // Signal-cli doesn't always provide group names in the envelope
     // We might need to listGroups to fetch names if needed.
-    this.opts.onChatMetadata(chatJid, timestamp, isGroup ? 'Signal Group' : sender, 'signal', isGroup);
+    this.opts.onChatMetadata(
+      chatJid,
+      timestamp,
+      isGroup ? 'Signal Group' : sender,
+      'signal',
+      isGroup,
+    );
 
     const groups = this.opts.registeredGroups();
     const chatKey = `${chatJid}|signal`;
@@ -125,7 +140,7 @@ export class SignalChannel implements Channel {
   async sendMessage(jid: string, text: string): Promise<void> {
     // Determine if recipient is a group (base64 ID) or a phone number
     const isGroup = jid.includes('=') || jid.length > 20; // Heuristic for group IDs in signal-cli
-    
+
     const params: any = { message: text };
     if (isGroup) {
       params.groupId = jid;
@@ -142,7 +157,11 @@ export class SignalChannel implements Channel {
 
   ownsJid(jid: string): boolean {
     // Signal JIDs are either phone numbers (+...) or base64 group IDs
-    return jid.startsWith('+') || jid.includes('=') || /^[a-zA-Z0-9+/=]{20,}$/.test(jid);
+    return (
+      jid.startsWith('+') ||
+      jid.includes('=') ||
+      /^[a-zA-Z0-9+/=]{20,}$/.test(jid)
+    );
   }
 
   async disconnect(): Promise<void> {

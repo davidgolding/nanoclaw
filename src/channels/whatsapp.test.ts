@@ -788,8 +788,16 @@ describe('WhatsAppChannel', () => {
       await new Promise((r) => setTimeout(r, 50));
 
       expect(fakeSocket.groupFetchAllParticipating).toHaveBeenCalled();
-      expect(updateChatName).toHaveBeenCalledWith('group1@g.us', 'whatsapp', 'Group One');
-      expect(updateChatName).toHaveBeenCalledWith('group2@g.us', 'whatsapp', 'Group Two');
+      expect(updateChatName).toHaveBeenCalledWith(
+        'group1@g.us',
+        'whatsapp',
+        'Group One',
+      );
+      expect(updateChatName).toHaveBeenCalledWith(
+        'group2@g.us',
+        'whatsapp',
+        'Group Two',
+      );
       expect(setLastGroupSync).toHaveBeenCalled();
     });
 
@@ -826,7 +834,11 @@ describe('WhatsAppChannel', () => {
       await channel.syncGroupMetadata(true);
 
       expect(fakeSocket.groupFetchAllParticipating).toHaveBeenCalled();
-      expect(updateChatName).toHaveBeenCalledWith('group@g.us', 'whatsapp', 'Forced Group');
+      expect(updateChatName).toHaveBeenCalledWith(
+        'group@g.us',
+        'whatsapp',
+        'Forced Group',
+      );
     });
 
     it('handles group sync failure gracefully', async () => {
@@ -861,7 +873,11 @@ describe('WhatsAppChannel', () => {
       await channel.syncGroupMetadata(true);
 
       expect(updateChatName).toHaveBeenCalledTimes(1);
-      expect(updateChatName).toHaveBeenCalledWith('group1@g.us', 'whatsapp', 'Has Subject');
+      expect(updateChatName).toHaveBeenCalledWith(
+        'group1@g.us',
+        'whatsapp',
+        'Has Subject',
+      );
     });
   });
 

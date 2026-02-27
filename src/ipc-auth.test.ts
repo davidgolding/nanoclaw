@@ -414,36 +414,64 @@ describe('IPC message authorization', () => {
   }
 
   it('main group can send to any group', () => {
-    expect(isMessageAuthorized('main', true, 'other@g.us', 'whatsapp', groups)).toBe(true);
-    expect(isMessageAuthorized('main', true, 'third@g.us', 'whatsapp', groups)).toBe(true);
+    expect(
+      isMessageAuthorized('main', true, 'other@g.us', 'whatsapp', groups),
+    ).toBe(true);
+    expect(
+      isMessageAuthorized('main', true, 'third@g.us', 'whatsapp', groups),
+    ).toBe(true);
   });
 
   it('non-main group can send to its own chat', () => {
     expect(
-      isMessageAuthorized('other-group', false, 'other@g.us', 'whatsapp', groups),
+      isMessageAuthorized(
+        'other-group',
+        false,
+        'other@g.us',
+        'whatsapp',
+        groups,
+      ),
     ).toBe(true);
   });
 
   it('non-main group cannot send to another groups chat', () => {
-    expect(isMessageAuthorized('other-group', false, 'main@g.us', 'whatsapp', groups)).toBe(
-      false,
-    );
     expect(
-      isMessageAuthorized('other-group', false, 'third@g.us', 'whatsapp', groups),
+      isMessageAuthorized(
+        'other-group',
+        false,
+        'main@g.us',
+        'whatsapp',
+        groups,
+      ),
+    ).toBe(false);
+    expect(
+      isMessageAuthorized(
+        'other-group',
+        false,
+        'third@g.us',
+        'whatsapp',
+        groups,
+      ),
     ).toBe(false);
   });
 
   it('non-main group cannot send to unregistered JID', () => {
     expect(
-      isMessageAuthorized('other-group', false, 'unknown@g.us', 'whatsapp', groups),
+      isMessageAuthorized(
+        'other-group',
+        false,
+        'unknown@g.us',
+        'whatsapp',
+        groups,
+      ),
     ).toBe(false);
   });
 
   it('main group can send to unregistered JID', () => {
     // Main is always authorized regardless of target
-    expect(isMessageAuthorized('main', true, 'unknown@g.us', 'whatsapp', groups)).toBe(
-      true,
-    );
+    expect(
+      isMessageAuthorized('main', true, 'unknown@g.us', 'whatsapp', groups),
+    ).toBe(true);
   });
 });
 
