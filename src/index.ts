@@ -54,6 +54,7 @@ let messageLoopRunning = false;
 const channelManager = new ChannelManager();
 let channels: Channel[] = [];
 const queue = new GroupQueue();
+let memoizedChatPairs: Array<{ jid: string; channel: string }> = [];
 
 function loadState(): void {
   lastTimestamp = getRouterState('last_timestamp') || '';
@@ -66,10 +67,18 @@ function loadState(): void {
   }
   sessions = getAllSessions();
   registeredGroups = getAllRegisteredGroups();
+  updateChatPairsMemo();
   logger.info(
     { groupCount: Object.keys(registeredGroups).length },
     'State loaded',
   );
+}
+
+function updateChatPairsMemo(): void {
+  memoizedChatPairs = Object.entries(registeredGroups).map(([key]) => {
+    const [jid, channel] = key.split('|');
+    return { jid, channel };
+  });
 }
 
 function saveState(): void {
@@ -95,6 +104,7 @@ function registerGroup(
 
   registeredGroups[`${jid}|${channel}`] = { ...group, channel };
   setRegisteredGroup(jid, channel, group);
+  updateChatPairsMemo();
 
   // Create group folder
   fs.mkdirSync(path.join(groupDir, 'logs'), { recursive: true });
@@ -344,12 +354,8 @@ async function startMessageLoop(): Promise<void> {
 
   while (true) {
     try {
-      const chatPairs = Object.entries(registeredGroups).map(([key, group]) => {
-        const [jid, channel] = key.split('|');
-        return { jid, channel };
-      });
       const { messages, newTimestamp } = getNewMessages(
-        chatPairs,
+        memoizedChatPairs,
         lastTimestamp,
         ASSISTANT_NAME,
       );
@@ -536,7 +542,7 @@ async function main(): Promise<void> {
     registerGroup,
     syncGroupMetadata: (force) => {
       const wa = channelManager.getChannel('whatsapp');
-      return (wa as any)?.syncGroupMetadata(force) ?? Promise.resolve();
+      return wa?.syncGroupMetadata?.(force) ?? Promise.resolve();
     },
     getAvailableGroups,
     writeGroupsSnapshot: (gf, im, ag, rj) =>

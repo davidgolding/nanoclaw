@@ -4,7 +4,7 @@ import { CronExpressionParser } from 'cron-parser';
 import { MESSAGES_DIR, TASKS_DIR, IPC_DIR, writeIpcFile } from './ipc.js';
 import { AgentTool } from '../types.js';
 
-export const sendMessage: AgentTool = {
+export const sendMessage: AgentTool<{ text: string; sender?: string }, string> = {
   name: 'send_message',
   description: "Send a message to the user or group immediately while you're still running. Use this for progress updates or to send multiple messages.",
   parameters: {
@@ -15,7 +15,7 @@ export const sendMessage: AgentTool = {
     },
     required: ['text'],
   },
-  execute: async (args: { text: string; sender?: string }) => {
+  execute: async (args) => {
     const chatJid = process.env.NANOCLAW_CHAT_JID!;
     const groupFolder = process.env.NANOCLAW_GROUP_FOLDER!;
     
@@ -33,7 +33,13 @@ export const sendMessage: AgentTool = {
   },
 };
 
-export const scheduleTask: AgentTool = {
+export const scheduleTask: AgentTool<{
+  prompt: string;
+  schedule_type: 'cron' | 'interval' | 'once';
+  schedule_value: string;
+  context_mode?: 'group' | 'isolated';
+  target_group_jid?: string;
+}, string> = {
   name: 'schedule_task',
   description: 'Schedule a recurring or one-time task.',
   parameters: {
@@ -47,7 +53,7 @@ export const scheduleTask: AgentTool = {
     },
     required: ['prompt', 'schedule_type', 'schedule_value'],
   },
-  execute: async (args: any) => {
+  execute: async (args) => {
     const chatJid = process.env.NANOCLAW_CHAT_JID!;
     const groupFolder = process.env.NANOCLAW_GROUP_FOLDER!;
     const isMain = process.env.NANOCLAW_IS_MAIN === '1';
@@ -75,7 +81,7 @@ export const scheduleTask: AgentTool = {
   },
 };
 
-export const listTasks: AgentTool = {
+export const listTasks: AgentTool<Record<string, never>, string> = {
   name: 'list_tasks',
   description: 'List all scheduled tasks.',
   parameters: { type: 'object', properties: {} },
@@ -93,15 +99,13 @@ export const listTasks: AgentTool = {
 
     const formatted = tasks
       .map((t: any) => `- [${t.id}] ${t.prompt.slice(0, 50)}... (${t.schedule_type}: ${t.schedule_value}) - ${t.status}`)
-      .join('
-');
+      .join('\n');
 
-    return `Scheduled tasks:
-${formatted}`;
+    return `Scheduled tasks:\n${formatted}`;
   },
 };
 
-export const pauseTask: AgentTool = {
+export const pauseTask: AgentTool<{ task_id: string }, string> = {
   name: 'pause_task',
   description: 'Pause a scheduled task.',
   parameters: {
@@ -109,7 +113,7 @@ export const pauseTask: AgentTool = {
     properties: { task_id: { type: 'string' } },
     required: ['task_id'],
   },
-  execute: async (args: { task_id: string }) => {
+  execute: async (args) => {
     const data = {
       type: 'pause_task',
       taskId: args.task_id,
@@ -122,7 +126,7 @@ export const pauseTask: AgentTool = {
 
 // ... resumeTask, cancelTask, registerGroup would be implemented similarly
 
-export const sharedTools: AgentTool[] = [
+export const sharedTools: AgentTool<any, any>[] = [
   sendMessage,
   scheduleTask,
   listTasks,

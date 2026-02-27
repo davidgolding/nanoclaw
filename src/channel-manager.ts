@@ -1,15 +1,18 @@
 import fs from 'fs';
 import path from 'path';
+import { z } from 'zod';
 import { logger } from './logger.js';
 import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from './types.js';
 import { WhatsAppChannel } from './channels/whatsapp.js';
 import { TelegramChannel } from './channels/telegram.js';
 
-export interface ChannelConfig {
-  type: string;
-  enabled: boolean;
-  options?: Record<string, any>;
-}
+const ChannelConfigSchema = z.object({
+  type: z.string(),
+  enabled: z.boolean(),
+  options: z.record(z.any()).optional(),
+});
+
+export type ChannelConfig = z.infer<typeof ChannelConfigSchema>;
 
 export class ChannelManager {
   private channels: Map<string, Channel> = new Map();
@@ -37,7 +40,8 @@ export class ChannelManager {
     
     for (const file of files) {
       try {
-        const config: ChannelConfig = JSON.parse(fs.readFileSync(path.join(this.configDir, file), 'utf-8'));
+        const rawConfig = JSON.parse(fs.readFileSync(path.join(this.configDir, file), 'utf-8'));
+        const config = ChannelConfigSchema.parse(rawConfig);
         if (!config.enabled) continue;
 
         let channel: Channel | undefined;

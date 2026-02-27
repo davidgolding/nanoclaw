@@ -18,11 +18,11 @@ export interface ContainerOutput {
   error?: string;
 }
 
-export interface AgentTool {
+export interface AgentTool<TArgs = any, TReturn = any> {
   name: string;
   description: string;
   parameters: Record<string, any>;
-  execute: (args: any) => Promise<any>;
+  execute: (args: TArgs) => Promise<TReturn>;
 }
 
 export interface AgentProvider {

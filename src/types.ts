@@ -90,6 +90,8 @@ export interface Channel {
   disconnect(): Promise<void>;
   // Optional: channel-specific setup/auth flow
   setup?(): Promise<void>;
+  // Optional: sync group names from service
+  syncGroupMetadata?(force?: boolean): Promise<void>;
   // Optional: typing indicator. Channels that support it implement it.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
 }
