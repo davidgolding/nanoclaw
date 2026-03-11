@@ -122,7 +122,7 @@ function buildVolumeMounts(
     '.claude',
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
-  
+
   // Ensure the debug directory exists inside .claude/ so the SDK doesn't fail with ENOENT
   // Since we mount groupSessionsDir to /home/node/.claude, this is /home/node/.claude/debug
   fs.mkdirSync(path.join(groupSessionsDir, 'debug'), { recursive: true });
@@ -163,14 +163,17 @@ function buildVolumeMounts(
     }
   }
 
-  // If host is running as root, the container's node user (UID 1000) won't have 
+  // If host is running as root, the container's node user (UID 1000) won't have
   // write access to the newly created host directories. Chown them to 1000.
   const hostUid = process.getuid?.();
   if (hostUid === 0) {
     try {
       execSync(`chown -R 1000:1000 "${groupSessionsDir}"`);
     } catch (err) {
-      logger.warn({ groupSessionsDir, err }, 'Failed to chown group sessions directory');
+      logger.warn(
+        { groupSessionsDir, err },
+        'Failed to chown group sessions directory',
+      );
     }
   }
 
@@ -224,7 +227,10 @@ function buildVolumeMounts(
     try {
       execSync(`chown -R 1000:1000 "${groupAgentRunnerDir}"`);
     } catch (err) {
-      logger.warn({ groupAgentRunnerDir, err }, 'Failed to chown group agent-runner source directory');
+      logger.warn(
+        { groupAgentRunnerDir, err },
+        'Failed to chown group agent-runner source directory',
+      );
     }
   }
   mounts.push({

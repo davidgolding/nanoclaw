@@ -135,7 +135,10 @@ async function triggerRoomMessage(roomId: string, event: any): Promise<void> {
 describe('factory registration', () => {
   it('registers matrix with the channel registry', async () => {
     const { registerChannel } = await import('./registry.js');
-    expect(registerChannel).toHaveBeenCalledWith('matrix', expect.any(Function));
+    expect(registerChannel).toHaveBeenCalledWith(
+      'matrix',
+      expect.any(Function),
+    );
   });
 });
 
