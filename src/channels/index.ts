@@ -10,3 +10,5 @@
 // telegram
 
 // whatsapp
+
+import './matrix.js';

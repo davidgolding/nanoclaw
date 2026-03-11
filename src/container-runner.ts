@@ -2,7 +2,7 @@
  * Container Runner for NanoClaw
  * Spawns agent execution in containers and handles IPC
  */
-import { ChildProcess, exec, spawn } from 'child_process';
+import { ChildProcess, exec, execSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -122,6 +122,11 @@ function buildVolumeMounts(
     '.claude',
   );
   fs.mkdirSync(groupSessionsDir, { recursive: true });
+  
+  // Ensure the debug directory exists inside .claude/ so the SDK doesn't fail with ENOENT
+  // Since we mount groupSessionsDir to /home/node/.claude, this is /home/node/.claude/debug
+  fs.mkdirSync(path.join(groupSessionsDir, 'debug'), { recursive: true });
+
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   if (!fs.existsSync(settingsFile)) {
     fs.writeFileSync(
@@ -157,6 +162,18 @@ function buildVolumeMounts(
       fs.cpSync(srcDir, dstDir, { recursive: true });
     }
   }
+
+  // If host is running as root, the container's node user (UID 1000) won't have 
+  // write access to the newly created host directories. Chown them to 1000.
+  const hostUid = process.getuid?.();
+  if (hostUid === 0) {
+    try {
+      execSync(`chown -R 1000:1000 "${groupSessionsDir}"`);
+    } catch (err) {
+      logger.warn({ groupSessionsDir, err }, 'Failed to chown group sessions directory');
+    }
+  }
+
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.claude',
@@ -169,6 +186,15 @@ function buildVolumeMounts(
   fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
   fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
   fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
+
+  if (hostUid === 0) {
+    try {
+      execSync(`chown -R 1000:1000 "${groupIpcDir}"`);
+    } catch (err) {
+      logger.warn({ groupIpcDir, err }, 'Failed to chown group IPC directory');
+    }
+  }
+
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
@@ -192,6 +218,14 @@ function buildVolumeMounts(
   );
   if (!fs.existsSync(groupAgentRunnerDir) && fs.existsSync(agentRunnerSrc)) {
     fs.cpSync(agentRunnerSrc, groupAgentRunnerDir, { recursive: true });
+  }
+
+  if (hostUid === 0) {
+    try {
+      execSync(`chown -R 1000:1000 "${groupAgentRunnerDir}"`);
+    } catch (err) {
+      logger.warn({ groupAgentRunnerDir, err }, 'Failed to chown group agent-runner source directory');
+    }
   }
   mounts.push({
     hostPath: groupAgentRunnerDir,
